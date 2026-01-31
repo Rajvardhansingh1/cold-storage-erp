@@ -4,8 +4,8 @@ import './App.css';
 
 // --- CONFIGURATION ---
 // CHANGE THIS if you deploy: 'https://your-render-app.onrender.com/api'
-const API_URL = 'http://localhost:5000/api'; 
-
+// const API_URL = 'http://localhost:5000/api'; 
+const API_URL = 'https://cold-storage-erp.onrender.com/api';
 export default function App() {
   const [user, setUser] = useState(null); // { user, profile }
   const [activeTab, setActiveTab] = useState('add_inventory'); 
