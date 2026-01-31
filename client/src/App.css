@@ -1,13 +1,13 @@
-/* --- RESET & BASICS --- */
+/* --- RESET & VARIABLES --- */
 :root {
-  --primary: #4f46e5; /* Astra Blue */
+  --primary: #4f46e5;       /* Astra Blue */
   --primary-hover: #4338ca;
   --secondary: #64748b;
-  --danger: #ef4444;
-  --sidebar-bg: #0f172a; /* Deep Navy */
-  --bg-color: #f1f5f9; /* Light Gray Background */
+  --danger: #ef4444;        /* Red for Delete */
+  --sidebar-bg: #0f172a;    /* Deep Navy */
+  --bg-color: #f1f5f9;      /* Light Gray Page Background */
   --card-bg: #ffffff;
-  --text-main: #1e293b;
+  --text-main: #1e293b;     /* Dark Slate (Almost Black) */
   --text-muted: #64748b;
   --border-color: #e2e8f0;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
@@ -26,6 +26,29 @@ body {
   color: var(--text-main);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+/* --- FIX FOR INVISIBLE TEXT (CRITICAL) --- */
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="file"] {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  transition: all 0.2s;
+  background-color: #f8fafc; /* Very light gray bg */
+  color: #1e293b !important; /* FORCE DARK TEXT */
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background-color: #ffffff;
+  color: #000000 !important; /* Force Black on focus */
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
 /* --- LAYOUT --- */
@@ -52,9 +75,8 @@ body {
 .sidebar h2 {
   font-size: 1.25rem;
   font-weight: 700;
+  color: #ffffff;
   margin-bottom: 0.5rem;
-  letter-spacing: -0.025em;
-  color: #fff;
 }
 
 .user-info {
@@ -118,7 +140,6 @@ body {
   font-weight: 800;
   color: var(--text-main);
   margin-bottom: 1.5rem;
-  letter-spacing: -0.025em;
 }
 
 /* --- CARDS --- */
@@ -142,7 +163,7 @@ body {
   padding-bottom: 0.75rem;
 }
 
-/* --- FORMS & INPUTS --- */
+/* --- FORMS --- */
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -159,26 +180,6 @@ label {
   font-weight: 500;
   color: var(--text-main);
   margin-bottom: 0.4rem;
-}
-
-input[type="text"],
-input[type="password"],
-input[type="number"],
-input[type="file"] {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--border-color);
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  transition: all 0.2s;
-  background-color: #f8fafc;
-}
-
-input:focus {
-  outline: none;
-  border-color: var(--primary);
-  background-color: #fff;
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
 .row {
@@ -298,10 +299,6 @@ button.action-btn:hover {
   color: var(--text-main);
 }
 
-.data-table tr:last-child td {
-  border-bottom: none;
-}
-
 .data-table tr:hover td {
   background-color: #f8fafc;
 }
@@ -344,11 +341,6 @@ button.action-btn:hover {
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
-}
-
-.login-form button:hover {
-  background-color: var(--primary-hover);
 }
 
 /* --- RECEIPT / PRINT STYLES --- */
@@ -364,10 +356,14 @@ button.action-btn:hover {
 .receipt-paper {
   padding: 3rem;
   background-color: white;
-  background-size: 300px;
+  background-size: 300px; /* Size of Watermark */
   background-repeat: no-repeat;
   background-position: center;
   min-height: 600px;
+  
+  /* CRITICAL: Forces background images to print */
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
 }
 
 .org-header {
@@ -438,10 +434,14 @@ button.action-btn:hover {
   border-top: 1px solid #e2e8f0;
 }
 
+/* --- PRINT MEDIA QUERY --- */
 @media print {
+  /* Hide sidebar and buttons when printing */
   .sidebar, .no-print, .header-row, button {
     display: none !important;
   }
+  
+  /* Reset layout for paper */
   .dashboard {
     display: block;
   }
@@ -452,5 +452,13 @@ button.action-btn:hover {
   .receipt-wrapper {
     box-shadow: none;
     max-width: 100%;
+    margin: 0;
+  }
+  
+  /* Force background to appear */
+  body, .receipt-paper {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    background-color: white !important;
   }
 }

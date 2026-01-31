@@ -167,9 +167,12 @@ app.post('/api/manager/delete-inventory', async (req, res) => {
 });
 
 // 8. ADD INVENTORY ENTRY (Standard - Fixed RLS & Structure)
+// 8. ADD INVENTORY (Updated to save Username Permanently)
 app.post('/api/inventory', async (req, res) => {
   const { 
-    orgId, userId, farmerName, fatherName, farmerCount, 
+    orgId, userId, 
+    creatorName, // <--- NEW: Receiving the Username from Frontend
+    farmerName, fatherName, farmerCount, 
     lotBase, actualCount,
     mota, gulla, isGullaColored, 
     ketpeice, isKetPeiceColored, 
@@ -178,39 +181,31 @@ app.post('/api/inventory', async (req, res) => {
   } = req.body;
 
   try {
-    // A. Get Next Index (Using Admin Client is safest)
     const { data: nextIndex, error: rpcError } = await supabaseAdmin
-      .rpc('get_next_lot_index', { 
-        org_id_input: orgId, 
-        lot_base_input: lotBase 
-      });
+      .rpc('get_next_lot_index', { org_id_input: orgId, lot_base_input: lotBase });
 
     if (rpcError) throw rpcError;
 
-    // B. Generate Lot String
     const fullLotNumber = `${lotBase}.${nextIndex}/${farmerCount}`;
 
-    // C. Insert Data (Using Admin Client bypasses "Anonymous User" RLS errors)
     const { data, error } = await supabaseAdmin
       .from('inventory_entries')
       .insert({
         org_id: orgId,
-        created_by: userId,
+        created_by: userId,       // The ID link (can become NULL if deleted)
+        creator_name: creatorName,// <--- The Permanent Text (Stays forever)
         farmer_name: farmerName,
         father_name: fatherName,
         farmer_count: farmerCount,
-        
         lot_number_base: lotBase,
         lot_index: nextIndex,
         full_lot_number: fullLotNumber,
-
         count_mota: mota,
         count_gulla: gulla,
         is_gulla_colored: isGullaColored,
         count_ketpeice: ketpeice,        
         is_ketpeice_colored: isKetPeiceColored, 
         count_haara: haara,
-        
         is_marked: isMarked,
         mark_name: markName,
         actual_count: actualCount
@@ -219,7 +214,6 @@ app.post('/api/inventory', async (req, res) => {
       .single();
 
     if (error) throw error;
-
     res.json({ success: true, entry: data, lotNumber: fullLotNumber });
 
   } catch (err) {

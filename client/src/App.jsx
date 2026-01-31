@@ -3,15 +3,19 @@ import axios from 'axios';
 import './App.css';
 
 // --- CONFIGURATION ---
-const API_URL = 'http://localhost:5000/api';
+// CHANGE THIS if you deploy: 'https://your-render-app.onrender.com/api'
+const API_URL = 'http://localhost:5000/api'; 
 
 export default function App() {
   const [user, setUser] = useState(null); // { user, profile }
   const [activeTab, setActiveTab] = useState('add_inventory'); 
+  const [isLoggingIn, setIsLoggingIn] = useState(false); // NEW: Loading state
 
   // --- LOGIN LOGIC ---
   const handleLogin = async (e) => {
     e.preventDefault();
+    setIsLoggingIn(true); // 1. Start Loading
+    
     const username = e.target.username.value;
     const password = e.target.password.value;
 
@@ -21,10 +25,11 @@ export default function App() {
       if (res.data.profile.role === 'employee') setActiveTab('add_inventory');
     } catch (err) {
       alert("Login Failed: " + (err.response?.data?.error || "Check your User ID/Password"));
+      setIsLoggingIn(false); // Stop loading on error
     }
   };
 
-  // --- HELPER: UPDATE USER STATE (Live Watermark Updates) ---
+  // --- HELPER: LIVE WATERMARK UPDATE ---
   const refreshUserWatermark = (newUrl) => {
     setUser(prev => ({
       ...prev,
@@ -38,21 +43,26 @@ export default function App() {
     }));
   };
 
+  // --- VIEW 1: LOGIN SCREEN ---
   if (!user) {
     return (
       <div className="login-container">
         <h1>❄️ Cold Storage ERP</h1>
         <form onSubmit={handleLogin} className="login-form">
           <label>User ID</label>
-          <input name="username" type="text" placeholder="e.g. admin" required autoFocus />
+          <input name="username" type="text" placeholder="e.g. admin" required autoFocus disabled={isLoggingIn} />
           <label>Password</label>
-          <input name="password" type="password" placeholder="Enter Password" required />
-          <button type="submit">Log In</button>
+          <input name="password" type="password" placeholder="Enter Password" required disabled={isLoggingIn} />
+          
+          <button type="submit" disabled={isLoggingIn} style={isLoggingIn ? {opacity:0.7, cursor:'wait'} : {}}>
+            {isLoggingIn ? "🔄 Authenticating..." : "Log In"}
+          </button>
         </form>
       </div>
     );
   }
 
+  // --- VIEW 2: DASHBOARD ---
   return (
     <div className="dashboard">
       <div className="sidebar">
@@ -82,9 +92,8 @@ export default function App() {
 }
 
 // ---------------------------------------------------------------------
-// SHARED COMPONENT: RECEIPT TEMPLATE
+// SHARED: RECEIPT TEMPLATE
 // ---------------------------------------------------------------------
-// We pulled this out so both "Add Inventory" and "View Inventory" can use it
 const ReceiptTemplate = ({ data, orgData, onClose }) => {
   const bgStyle = orgData.watermark_url ? { backgroundImage: `url("${orgData.watermark_url}")` } : {};
 
@@ -97,34 +106,29 @@ const ReceiptTemplate = ({ data, orgData, onClose }) => {
             <p><strong>Date:</strong> {new Date(data.created_at || Date.now()).toLocaleDateString()}</p>
             <p><strong>Receipt #:</strong> {data.full_lot_number || data.lotNumber}</p>
           </div>
-          
           <div className="farmer-info">
             <p><strong>Farmer:</strong> {data.farmer_name || data.farmerName} <strong>S/o</strong> {data.father_name || data.fatherName}</p>
             <p><strong>Bags Declared:</strong> {data.farmer_count || data.farmerCount}</p>
           </div>
-
           <table className="receipt-table">
             <thead><tr><th>Type</th><th>Count</th><th>Notes</th></tr></thead>
             <tbody>
-              <tr><td>Mota</td><td>{data.count_mota || data.mota}</td><td>-</td></tr>
-              <tr><td>Gulla</td><td>{data.count_gulla || data.gulla}</td><td>{(data.is_gulla_colored || data.isGullaColored) ? 'Colored' : 'Plain'}</td></tr>
-              <tr><td>KetPeice</td><td>{data.count_ketpeice || data.ketpeice}</td><td>{(data.is_ketpeice_colored || data.isKetPeiceColored) ? 'Colored' : 'Plain'}</td></tr>
-              <tr><td>Haara</td><td>{data.count_haara || data.haara}</td><td>-</td></tr>
+              <tr><td>Mota</td><td>{data.count_mota ?? data.mota}</td><td>-</td></tr>
+              <tr><td>Gulla</td><td>{data.count_gulla ?? data.gulla}</td><td>{(data.is_gulla_colored || data.isGullaColored) ? 'Colored' : 'Plain'}</td></tr>
+              <tr><td>KetPeice</td><td>{data.count_ketpeice ?? data.ketpeice}</td><td>{(data.is_ketpeice_colored || data.isKetPeiceColored) ? 'Colored' : 'Plain'}</td></tr>
+              <tr><td>Haara</td><td>{data.count_haara ?? data.haara}</td><td>-</td></tr>
             </tbody>
           </table>
-
           <div className="totals">
-            <h3>Total Actual: {data.actual_count || data.actualCount}</h3>
+            <h3>Total Actual: {data.actual_count ?? data.actualCount}</h3>
             <p><strong>Marking:</strong> {(data.is_marked || data.isMarked) ? (data.mark_name || data.markName) : "None"}</p>
           </div>
-
           <div className="signatures">
             <div className="sign-box"><hr />Manager Signature</div>
             <div className="sign-box"><hr />Farmer Signature</div>
           </div>
         </div>
       </div>
-      
       <div className="no-print">
         <button className="primary-btn" onClick={() => window.print()}>🖨️ Print</button>
         <button className="secondary-btn" onClick={onClose}>Close / Back</button>
@@ -134,57 +138,129 @@ const ReceiptTemplate = ({ data, orgData, onClose }) => {
 };
 
 // ---------------------------------------------------------------------
-// COMPONENT 1: ADD INVENTORY
+// COMPONENT 1: ADD INVENTORY (With Voice Input 🎤)
 // ---------------------------------------------------------------------
 function AddInventoryTab({ user }) {
   const [formData, setFormData] = useState({
     farmerName: '', fatherName: '', farmerCount: '', lotBase: '',
-    mota: 0, gulla: 0, isGullaColored: false,
-    ketpeice: 0, isKetPeiceColored: false, haara: 0,
+    mota: '', gulla: '', isGullaColored: false,
+    ketpeice: '', isKetPeiceColored: false, haara: '',
     isMarked: false, markName: ''
   });
   const [actualCount, setActualCount] = useState(0);
   const [receiptEntry, setReceiptEntry] = useState(null);
+  const [isListening, setIsListening] = useState(false); // Visual feedback
 
   useEffect(() => {
-    const total = (parseInt(formData.mota)||0) + (parseInt(formData.gulla)||0) + (parseInt(formData.ketpeice)||0) + (parseInt(formData.haara)||0);
+    const val = (v) => v === '' ? 0 : parseInt(v);
+    const total = val(formData.mota) + val(formData.gulla) + val(formData.ketpeice) + val(formData.haara);
     setActualCount(total);
   }, [formData]);
 
+  // --- NEW: VOICE INPUT FUNCTION ---
+  const handleVoiceInput = (field) => {
+    // Check browser support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      return alert("Voice input is not supported in this browser. Try Google Chrome.");
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-IN'; // Optimized for Indian English
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    setIsListening(true);
+    recognition.start();
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      // Update the specific field with the spoken text
+      setFormData(prev => ({ ...prev, [field]: transcript }));
+      setIsListening(false);
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Speech Error:", event.error);
+      setIsListening(false);
+    };
+    
+    recognition.onend = () => setIsListening(false);
+  };
+
   const handleSubmit = async () => {
     try {
+      const cleanData = {
+        ...formData,
+        mota: formData.mota === '' ? 0 : formData.mota,
+        gulla: formData.gulla === '' ? 0 : formData.gulla,
+        ketpeice: formData.ketpeice === '' ? 0 : formData.ketpeice,
+        haara: formData.haara === '' ? 0 : formData.haara,
+      };
+
       const res = await axios.post(`${API_URL}/inventory`, {
-        orgId: user.profile.org_id, userId: user.user.id, ...formData, actualCount
+        orgId: user.profile.org_id, 
+        userId: user.user.id, 
+        creatorName: user.profile.username,
+        ...cleanData, 
+        actualCount
       });
-      // Merge form data with response so Receipt has everything
-      setReceiptEntry({ ...formData, ...res.data.entry, lotNumber: res.data.lotNumber });
+      setReceiptEntry({ ...cleanData, ...res.data.entry, lotNumber: res.data.lotNumber });
     } catch (err) {
       alert("Error: " + (err.response?.data?.error || err.message));
     }
   };
 
   if (receiptEntry) {
-    return (
-      <ReceiptTemplate 
-        data={receiptEntry} 
-        orgData={user.profile.organizations} 
-        onClose={() => {
-          setReceiptEntry(null); 
-          setFormData({farmerName:'', fatherName:'', farmerCount:'', lotBase:'', mota:0, gulla:0, isGullaColored:false, ketpeice:0, isKetPeiceColored:false, haara:0, isMarked:false, markName:''});
-        }} 
-      />
-    );
+    return <ReceiptTemplate data={receiptEntry} orgData={user.profile.organizations} onClose={() => {
+      setReceiptEntry(null);
+      setFormData({farmerName:'', fatherName:'', farmerCount:'', lotBase:'', mota:'', gulla:'', isGullaColored:false, ketpeice:'', isKetPeiceColored:false, haara:'', isMarked:false, markName:''});
+    }} />;
   }
+
+  // Helper Style for Voice Button
+  const micBtnStyle = {
+    background: '#e0e7ff', border: '1px solid #c7d2fe', 
+    cursor: 'pointer', padding: '0 12px', borderRadius: '0 5px 5px 0', fontSize: '1.2rem'
+  };
 
   return (
     <div className="tab-container">
-      <h2>Add New Stock</h2>
+      <h2>Add New Stock {isListening && <span style={{fontSize:'0.6em', color:'red', animation:'pulse 1s infinite'}}>🔴 Listening...</span>}</h2>
+      
       <div className="form-grid">
-         <div className="card"><h3>1. Farmer</h3>
-            <div className="input-group"><label>Name</label><input value={formData.farmerName} onChange={e => setFormData({...formData, farmerName: e.target.value})} /></div>
-            <div className="input-group"><label>Father Name</label><input value={formData.fatherName} onChange={e => setFormData({...formData, fatherName: e.target.value})} /></div>
+         {/* 1. Farmer Details */}
+         <div className="card">
+            <h3>1. Farmer</h3>
+            
+            <div className="input-group">
+                <label>Farmer Name</label>
+                <div style={{display:'flex'}}>
+                  <input 
+                    value={formData.farmerName} 
+                    onChange={e => setFormData({...formData, farmerName: e.target.value})} 
+                    style={{borderRadius: '5px 0 0 5px'}}
+                  />
+                  <button style={micBtnStyle} onClick={() => handleVoiceInput('farmerName')} title="Speak Name">🎤</button>
+                </div>
+            </div>
+
+            <div className="input-group">
+                <label>Father's Name</label>
+                <div style={{display:'flex'}}>
+                  <input 
+                    value={formData.fatherName} 
+                    onChange={e => setFormData({...formData, fatherName: e.target.value})} 
+                    style={{borderRadius: '5px 0 0 5px'}}
+                  />
+                  <button style={micBtnStyle} onClick={() => handleVoiceInput('fatherName')} title="Speak Father Name">🎤</button>
+                </div>
+            </div>
+
             <div className="input-group"><label>Bags</label><input type="number" value={formData.farmerCount} onChange={e => setFormData({...formData, farmerCount: e.target.value})} /></div>
          </div>
+
+         {/* 2. Potato Details (Unchanged) */}
          <div className="card"><h3>2. Potato</h3>
            <div className="input-group"><label>Lot</label><input value={formData.lotBase} onChange={e => setFormData({...formData, lotBase: e.target.value})} /></div>
            <div className="row"><label>Mota:</label><input type="number" value={formData.mota} onChange={e => setFormData({...formData, mota: e.target.value})} /></div>
@@ -192,8 +268,25 @@ function AddInventoryTab({ user }) {
            <div className="row"><label>KetPeice:</label><input type="number" value={formData.ketpeice} onChange={e => setFormData({...formData, ketpeice: e.target.value})} /><label className="checkbox"><input type="checkbox" checked={formData.isKetPeiceColored} onChange={e => setFormData({...formData, isKetPeiceColored: e.target.checked})} /> Col?</label></div>
            <div className="row"><label>Haara:</label><input type="number" value={formData.haara} onChange={e => setFormData({...formData, haara: e.target.value})} /></div>
          </div>
-         <div className="card"><h3>3. Verify</h3>
-            <div className="marking-box"><label>Marked? <input type="checkbox" checked={formData.isMarked} onChange={e => setFormData({...formData, isMarked: e.target.checked})} /></label>{formData.isMarked && <input placeholder="Mark Name" value={formData.markName} onChange={e => setFormData({...formData, markName: e.target.value})} style={{width:'100%'}} />}</div>
+
+         {/* 3. Verification & Mark Name */}
+         <div className="card">
+            <h3>3. Verify</h3>
+            <div className="marking-box">
+                <label>Marked? <input type="checkbox" checked={formData.isMarked} onChange={e => setFormData({...formData, isMarked: e.target.checked})} /></label>
+                
+                {formData.isMarked && (
+                  <div style={{display:'flex', marginTop:'10px'}}>
+                    <input 
+                      placeholder="Enter Marking Name" 
+                      value={formData.markName} 
+                      onChange={e => setFormData({...formData, markName: e.target.value})} 
+                      style={{borderRadius: '5px 0 0 5px', width: '100%'}} 
+                    />
+                    <button style={micBtnStyle} onClick={() => handleVoiceInput('markName')} title="Speak Mark">🎤</button>
+                  </div>
+                )}
+            </div>
             <div className="total-display">Total: {actualCount}</div>
             <button className="primary-btn full-width" onClick={handleSubmit}>Generate Receipt</button>
          </div>
@@ -201,9 +294,11 @@ function AddInventoryTab({ user }) {
     </div>
   );
 }
-
 // ---------------------------------------------------------------------
-// COMPONENT 2: VIEW INVENTORY (Updated with Reprint Feature)
+// COMPONENT 2: VIEW INVENTORY (Displays Permanent Username)
+// ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// COMPONENT 2: VIEW INVENTORY (With Excel Export)
 // ---------------------------------------------------------------------
 function ViewInventoryTab({ user }) {
   const [data, setData] = useState([]);
@@ -223,26 +318,76 @@ function ViewInventoryTab({ user }) {
     } catch (err) { alert("Delete failed"); }
   };
 
+  // --- NEW: EXPORT TO EXCEL FUNCTION ---
+  const downloadExcel = () => {
+    if (data.length === 0) return alert("No data to export.");
+
+    // 1. Define the Headers
+    const headers = [
+      "Date", "Time", "Lot Number", 
+      "Farmer Name", "Father Name", "Declared Bags", 
+      "Mota", "Gulla", "Gulla Col?", "KetPeice", "KetPeice Col?", "Haara",
+      "Total Actual", "Marked?", "Mark Name", "Added By (User ID)"
+    ];
+
+    // 2. Map the Data to Rows
+    const rows = data.map(item => [
+      new Date(item.created_at).toLocaleDateString(),
+      new Date(item.created_at).toLocaleTimeString(),
+      item.full_lot_number,
+      `"${item.farmer_name}"`, // Quotes handle names with commas
+      `"${item.father_name}"`,
+      item.farmer_count,
+      item.count_mota,
+      item.count_gulla,
+      item.is_gulla_colored ? "Yes" : "No",
+      item.count_ketpeice,
+      item.is_ketpeice_colored ? "Yes" : "No",
+      item.count_haara,
+      item.actual_count,
+      item.is_marked ? "Yes" : "No",
+      item.mark_name || "-",
+      item.creator_name || "Unknown"
+    ]);
+
+    // 3. Combine into CSV String
+    const csvContent = [
+      headers.join(","), 
+      ...rows.map(row => row.join(","))
+    ].join("\n");
+
+    // 4. Trigger Download
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `Inventory_Report_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   useEffect(() => {
     loadData();
     const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  // Show Receipt View if an item is selected
   if (selectedReceipt) {
-    return (
-      <ReceiptTemplate 
-        data={selectedReceipt} 
-        orgData={user.profile.organizations} // This passes the LIVE watermark
-        onClose={() => setSelectedReceipt(null)} 
-      />
-    );
+    return <ReceiptTemplate data={selectedReceipt} orgData={user.profile.organizations} onClose={() => setSelectedReceipt(null)} />;
   }
 
   return (
     <div className="tab-container">
-      <div className="header-row"><h2>Global Inventory</h2><button className="secondary-btn" onClick={loadData}>🔄 Refresh</button></div>
+      <div className="header-row" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+        <h2>Global Inventory</h2>
+        <div style={{display: 'flex', gap: '10px'}}>
+          {/* NEW EXPORT BUTTON */}
+          <button className="primary-btn" style={{backgroundColor: '#10b981'}} onClick={downloadExcel}>📊 Export Excel</button>
+          <button className="secondary-btn" onClick={loadData}>🔄 Refresh</button>
+        </div>
+      </div>
+      
       <table className="data-table">
         <thead><tr><th>Date</th><th>Lot #</th><th>Farmer</th><th>Total</th><th>Added By</th><th>Actions</th></tr></thead>
         <tbody>
@@ -252,7 +397,7 @@ function ViewInventoryTab({ user }) {
               <td>{item.full_lot_number}</td>
               <td>{item.farmer_name}</td>
               <td>{item.actual_count}</td>
-              <td>{item.profiles?.full_name || 'Unknown'}</td>
+              <td><strong>{item.creator_name || 'System'}</strong></td>
               <td style={{display:'flex', gap:'5px'}}>
                 <button className="action-btn" onClick={() => setSelectedReceipt(item)}>🖨️ Print</button>
                 <button className="danger-btn-small" onClick={() => deleteEntry(item.id)}>🗑️</button>
@@ -266,7 +411,42 @@ function ViewInventoryTab({ user }) {
 }
 
 // ---------------------------------------------------------------------
-// COMPONENT 3: SETTINGS (Unchanged)
+// COMPONENT 3: EMPLOYEES
+// ---------------------------------------------------------------------
+function EmployeesTab({ user }) {
+  const [employees, setEmployees] = useState([]);
+  const [newEmp, setNewEmp] = useState({ name: '', phone: '', username: '', password: '' });
+  const loadEmployees = () => { axios.post(`${API_URL}/manager/employees`, { orgId: user.profile.org_id }).then(res => setEmployees(res.data)); };
+  useEffect(loadEmployees, []);
+  
+  const addEmployee = async () => { 
+    try { await axios.post(`${API_URL}/manager/add-employee`, { orgId: user.profile.org_id, ...newEmp }); alert("Created!"); setNewEmp({name:'',phone:'',username:'',password:''}); loadEmployees(); } catch (e) { alert("Error"); } 
+  };
+  const removeEmployee = async (id) => { 
+    if(confirm("Remove?")) { await axios.post(`${API_URL}/manager/remove-employee`, { userId: id }); loadEmployees(); }
+  };
+
+  return (
+    <div className="tab-container">
+      <h2>Employees</h2>
+      <div className="add-emp-box card">
+        <div className="emp-form-grid">
+          <input placeholder="Name" value={newEmp.name} onChange={e=>setNewEmp({...newEmp,name:e.target.value})}/>
+          <input placeholder="Phone" value={newEmp.phone} onChange={e=>setNewEmp({...newEmp,phone:e.target.value})}/>
+          <input placeholder="User ID" value={newEmp.username} onChange={e=>setNewEmp({...newEmp,username:e.target.value})}/>
+          <input placeholder="Password" value={newEmp.password} onChange={e=>setNewEmp({...newEmp,password:e.target.value})}/>
+        </div>
+        <button className="primary-btn" onClick={addEmployee} style={{marginTop:'10px'}}>Add</button>
+      </div>
+      <div className="emp-list">
+        {employees.map(e=><div key={e.id} className="emp-card"><div><h4>{e.full_name}</h4><p>{e.username}</p></div><button className="danger-btn" onClick={()=>removeEmployee(e.id)}>Remove</button></div>)}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// COMPONENT 4: SETTINGS
 // ---------------------------------------------------------------------
 function SettingsTab({ user, updateUser }) {
   const [currentWatermark, setCurrentWatermark] = useState(user.profile.organizations.watermark_url || '');
@@ -292,23 +472,15 @@ function SettingsTab({ user, updateUser }) {
   return (
     <div className="tab-container">
       <h2>Receipt Settings</h2>
-      <div className="card"><h3>Upload Watermark</h3><input type="file" accept="image/*" onChange={e => setSelectedFile(e.target.files[0])} /><br/><br/><button className="primary-btn" onClick={handleUpload} disabled={isUploading}>{isUploading ? "Saving..." : "Save Watermark"}</button></div>
-      <div className="preview-section" style={{marginTop:'20px'}}><h4>Current:</h4>{currentWatermark ? <div style={{border:'2px dashed #ccc', padding:'10px', display:'inline-block', background:'white'}}><img src={currentWatermark} alt="Watermark" style={{maxHeight:'150px', opacity:0.5}} /></div> : <p>None.</p>}</div>
+      <div className="card">
+        <h3>Upload Watermark</h3>
+        <input type="file" accept="image/*" onChange={e => setSelectedFile(e.target.files[0])} /><br/><br/>
+        <button className="primary-btn" onClick={handleUpload} disabled={isUploading}>{isUploading ? "Saving..." : "Save Watermark"}</button>
+      </div>
+      <div className="preview-section" style={{marginTop:'20px'}}>
+        <h4>Current:</h4>
+        {currentWatermark ? <div style={{border:'2px dashed #ccc', padding:'10px', display:'inline-block', background:'white'}}><img src={currentWatermark} alt="Watermark" style={{maxHeight:'150px', opacity:0.5}} /></div> : <p>None.</p>}
+      </div>
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------
-// COMPONENT 4: EMPLOYEES (Unchanged)
-// ---------------------------------------------------------------------
-function EmployeesTab({ user }) {
-  const [employees, setEmployees] = useState([]);
-  const [newEmp, setNewEmp] = useState({ name: '', phone: '', username: '', password: '' });
-  const loadEmployees = () => { axios.post(`${API_URL}/manager/employees`, { orgId: user.profile.org_id }).then(res => setEmployees(res.data)); };
-  useEffect(loadEmployees, []);
-  const addEmployee = async () => { try { await axios.post(`${API_URL}/manager/add-employee`, { orgId: user.profile.org_id, ...newEmp }); alert("Created!"); setNewEmp({name:'',phone:'',username:'',password:''}); loadEmployees(); } catch (e) { alert("Error"); } };
-  const removeEmployee = async (id) => { if(confirm("Remove?")) { await axios.post(`${API_URL}/manager/remove-employee`, { userId: id }); loadEmployees(); }};
-  return (
-    <div className="tab-container"><h2>Employees</h2><div className="add-emp-box card"><div className="emp-form-grid"><input placeholder="Name" value={newEmp.name} onChange={e=>setNewEmp({...newEmp,name:e.target.value})}/><input placeholder="Phone" value={newEmp.phone} onChange={e=>setNewEmp({...newEmp,phone:e.target.value})}/><input placeholder="User ID" value={newEmp.username} onChange={e=>setNewEmp({...newEmp,username:e.target.value})}/><input placeholder="Password" value={newEmp.password} onChange={e=>setNewEmp({...newEmp,password:e.target.value})}/></div><button className="primary-btn" onClick={addEmployee} style={{marginTop:'10px'}}>Add</button></div><div className="emp-list">{employees.map(e=><div key={e.id} className="emp-card"><div><h4>{e.full_name}</h4><p>{e.username}</p></div><button className="danger-btn" onClick={()=>removeEmployee(e.id)}>Remove</button></div>)}</div></div>
   );
 }
